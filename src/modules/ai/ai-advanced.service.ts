@@ -3,7 +3,14 @@ import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 
 export interface QueryAnalysis {
-  type: 'expense' | 'report' | 'question' | 'help' | 'unknown';
+  type:
+    | 'expense'
+    | 'report'
+    | 'question'
+    | 'help'
+    | 'analysis'
+    | 'conversation'
+    | 'unknown';
   intent: string;
   parameters: {
     period?: 'today' | 'week' | 'month' | 'year' | 'custom';
@@ -12,16 +19,26 @@ export interface QueryAnalysis {
     category?: string;
     amount?: number;
     description?: string;
+    analysisType?: 'health' | 'trends' | 'categories' | 'comparison';
+    specificDate?: string;
   };
   confidence: number;
 }
 
 export interface IntelligentResponse {
-  type: 'expense' | 'report' | 'question' | 'help';
+  type:
+    | 'expense'
+    | 'report'
+    | 'question'
+    | 'help'
+    | 'analysis'
+    | 'conversation';
   data?: any;
   message?: string;
   shouldQueryDatabase?: boolean;
   queryParams?: any;
+  analysisData?: any;
+  requiresExpenseData?: boolean;
 }
 
 /**
@@ -70,6 +87,12 @@ export class AIAdvancedService {
         case 'question':
           return await this.processQuestionIntent(message, analysis);
 
+        case 'analysis':
+          return await this.processAnalysisIntent(message, analysis);
+
+        case 'conversation':
+          return await this.processConversationIntent(message, analysis);
+
         case 'help':
           return { type: 'help' };
 
@@ -100,10 +123,16 @@ Retorne APENAS um JSON válido com as seguintes chaves:
 
 TIPOS DE INTENÇÃO:
 - expense: registrar despesa ("gastei 50 no mercado")
-- report: relatório/consulta ("quanto gastei hoje", "relatório mês")
+- report: relatório/consulta ("quanto gastei hoje", "relatório mês", "gastos de 15/01")
 - question: pergunta específica ("qual minha maior despesa")
+- analysis: análise financeira ("analise meus gastos", "como está minha saúde financeira")
+- conversation: conversa geral ("oi", "como você está", "me conte sobre meus gastos")
 - help: pedido de ajuda ("ajuda", "help")
 - unknown: não conseguiu identificar
+
+PARÂMETROS ADICIONAIS:
+- specificDate: data específica mencionada ("gastos de 15/01", "despesas de ontem")
+- analysisType: tipo de análise (health, trends, categories, comparison)
 
 Mensagem: "${message}"
 
@@ -203,6 +232,58 @@ Exemplo de resposta:
       };
     }
 
+    // Detectar análise financeira
+    const analysisKeywords = [
+      'analise',
+      'análise',
+      'saúde financeira',
+      'saude financeira',
+      'como estou',
+      'avaliação',
+      'avaliacao',
+      'insights',
+      'tendências',
+      'tendencias',
+    ];
+    const hasAnalysisKeyword = analysisKeywords.some((keyword) =>
+      lowerMessage.includes(keyword),
+    );
+
+    if (hasAnalysisKeyword) {
+      return {
+        type: 'analysis',
+        intent: 'análise financeira',
+        parameters: { analysisType: 'health' },
+        confidence: 0.8,
+      };
+    }
+
+    // Detectar conversa
+    const conversationKeywords = [
+      'oi',
+      'olá',
+      'ola',
+      'como você está',
+      'como voce esta',
+      'conte sobre',
+      'me fale',
+      'bom dia',
+      'boa tarde',
+      'boa noite',
+    ];
+    const hasConversationKeyword = conversationKeywords.some((keyword) =>
+      lowerMessage.includes(keyword),
+    );
+
+    if (hasConversationKeyword) {
+      return {
+        type: 'conversation',
+        intent: 'conversa geral',
+        parameters: {},
+        confidence: 0.9,
+      };
+    }
+
     // Detectar ajuda
     if (lowerMessage.includes('ajuda') || lowerMessage.includes('help')) {
       return {
@@ -261,6 +342,41 @@ Exemplo de resposta:
     };
   }
 
+  private async processAnalysisIntent(
+    message: string,
+    analysis: QueryAnalysis,
+  ): Promise<IntelligentResponse> {
+    // Gerar análise financeira inteligente
+    const analysisResponse = await this.generateFinancialAnalysis(
+      message,
+      analysis,
+    );
+
+    return {
+      type: 'analysis',
+      message: analysisResponse,
+      requiresExpenseData: true,
+      queryParams: this.buildQueryParameters(analysis),
+    };
+  }
+
+  private async processConversationIntent(
+    message: string,
+    analysis: QueryAnalysis,
+  ): Promise<IntelligentResponse> {
+    // Gerar resposta conversacional
+    const conversationResponse = await this.generateConversationalResponse(
+      message,
+      analysis,
+    );
+
+    return {
+      type: 'conversation',
+      message: conversationResponse,
+      requiresExpenseData: true,
+    };
+  }
+
   private buildQueryParameters(
     analysis: QueryAnalysis,
   ): Record<string, unknown> {
@@ -278,8 +394,16 @@ Exemplo de resposta:
       params.endDate = analysis.parameters.endDate;
     }
 
+    if (analysis.parameters.specificDate) {
+      params.specificDate = analysis.parameters.specificDate;
+    }
+
     if (analysis.parameters.category) {
       params.category = analysis.parameters.category;
+    }
+
+    if (analysis.parameters.analysisType) {
+      params.analysisType = analysis.parameters.analysisType;
     }
 
     return params;
@@ -340,6 +464,122 @@ Exemplo de resposta para "qual minha maior despesa":
     } catch (error) {
       console.error('❌ Erro ao gerar resposta inteligente:', error);
       return 'Vou ajudar você com isso!';
+    }
+  }
+
+  private async generateFinancialAnalysis(
+    message: string,
+    analysis: QueryAnalysis,
+  ): Promise<string> {
+    const prompt = `
+Você é o MeuBolso.AI, um especialista em análise financeira pessoal.
+Analise os dados financeiros do usuário e forneça insights valiosos.
+
+Pergunta do usuário: "${message}"
+
+Contexto da análise:
+- Tipo: ${analysis.type}
+- Intenção: ${analysis.intent}
+- Parâmetros: ${JSON.stringify(analysis.parameters)}
+
+Forneça uma análise financeira que inclua:
+- Resumo dos gastos no período
+- Principais categorias de despesas
+- Tendências e padrões identificados
+- Recomendações para melhoria financeira
+- Dicas práticas de economia
+
+Seja específico, útil e encorajador. Use emojis para tornar mais amigável.
+Responda em português brasileiro de forma natural e profissional.
+`;
+
+    try {
+      console.log(
+        `📊 Gerando análise financeira com ${this.RESPONSE_MODEL}...`,
+      );
+
+      const completion = await this.openai.chat.completions.create({
+        model: this.RESPONSE_MODEL,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'Você é um especialista em análise financeira pessoal. Forneça insights valiosos, recomendações práticas e seja encorajador. Use português brasileiro natural.',
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        max_tokens: 400,
+        temperature: 0.7,
+      });
+
+      return (
+        completion.choices[0]?.message?.content ||
+        'Vou analisar seus dados financeiros para você! 📊'
+      );
+    } catch (error) {
+      console.error('❌ Erro ao gerar análise financeira:', error);
+      return 'Vou analisar seus dados financeiros para você! 📊';
+    }
+  }
+
+  private async generateConversationalResponse(
+    message: string,
+    analysis: QueryAnalysis,
+  ): Promise<string> {
+    const prompt = `
+Você é o MeuBolso.AI, um assistente financeiro conversacional e amigável.
+Mantenha uma conversa natural e útil sobre finanças pessoais.
+
+Mensagem do usuário: "${message}"
+
+Contexto:
+- Tipo: ${analysis.type}
+- Intenção: ${analysis.intent}
+
+Seja:
+- Conversacional e amigável
+- Útil e informativo sobre finanças
+- Natural em português brasileiro
+- Proativo em sugerir análises ou relatórios
+- Encorajador e positivo
+
+Se o usuário cumprimentar, responda de forma calorosa.
+Se perguntar sobre gastos, ofereça análises específicas.
+Se for uma conversa geral, mantenha o foco em finanças pessoais.
+`;
+
+    try {
+      console.log(
+        `💬 Gerando resposta conversacional com ${this.RESPONSE_MODEL}...`,
+      );
+
+      const completion = await this.openai.chat.completions.create({
+        model: this.RESPONSE_MODEL,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'Você é o MeuBolso.AI, um assistente financeiro conversacional, amigável e útil. Mantenha conversas naturais em português brasileiro, sempre focando em ajudar com finanças pessoais.',
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        max_tokens: 200,
+        temperature: 0.8,
+      });
+
+      return (
+        completion.choices[0]?.message?.content ||
+        'Olá! Como posso ajudar você com suas finanças hoje? 😊'
+      );
+    } catch (error) {
+      console.error('❌ Erro ao gerar resposta conversacional:', error);
+      return 'Olá! Como posso ajudar você com suas finanças hoje? 😊';
     }
   }
 
@@ -485,5 +725,137 @@ Exemplo de resposta:
       date: new Date().toISOString().split('T')[0],
       isValid: amount > 0,
     };
+  }
+
+  /**
+   * Processa dados de despesas e gera análise financeira inteligente
+   */
+  async generateIntelligentAnalysis(
+    message: string,
+    expenseData: any[],
+    analysis: QueryAnalysis,
+  ): Promise<string> {
+    const prompt = `
+Você é o MeuBolso.AI, um especialista em análise financeira pessoal.
+Analise os dados financeiros fornecidos e responda à pergunta do usuário.
+
+Pergunta do usuário: "${message}"
+
+Dados das despesas:
+${JSON.stringify(expenseData, null, 2)}
+
+Contexto da análise:
+- Tipo: ${analysis.type}
+- Intenção: ${analysis.intent}
+- Parâmetros: ${JSON.stringify(analysis.parameters)}
+
+Forneça uma análise detalhada que inclua:
+- Resumo dos gastos no período
+- Principais categorias de despesas
+- Tendências e padrões identificados
+- Comparações com períodos anteriores (se aplicável)
+- Recomendações específicas para melhoria financeira
+- Dicas práticas de economia baseadas nos dados
+
+Seja específico, útil e encorajador. Use emojis para tornar mais amigável.
+Responda em português brasileiro de forma natural e profissional.
+`;
+
+    try {
+      console.log(
+        `📊 Gerando análise inteligente com dados reais usando ${this.RESPONSE_MODEL}...`,
+      );
+
+      const completion = await this.openai.chat.completions.create({
+        model: this.RESPONSE_MODEL,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'Você é um especialista em análise financeira pessoal. Analise dados reais de despesas e forneça insights valiosos, recomendações práticas e seja encorajador. Use português brasileiro natural.',
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        max_tokens: 500,
+        temperature: 0.7,
+      });
+
+      return (
+        completion.choices[0]?.message?.content ||
+        'Vou analisar seus dados financeiros para você! 📊'
+      );
+    } catch (error) {
+      console.error('❌ Erro ao gerar análise inteligente:', error);
+      return 'Vou analisar seus dados financeiros para você! 📊';
+    }
+  }
+
+  /**
+   * Gera resposta conversacional com contexto dos dados financeiros
+   */
+  async generateContextualConversation(
+    message: string,
+    expenseData: any[],
+    analysis: QueryAnalysis,
+  ): Promise<string> {
+    const prompt = `
+Você é o MeuBolso.AI, um assistente financeiro conversacional e amigável.
+Use os dados financeiros do usuário para manter uma conversa útil e informativa.
+
+Mensagem do usuário: "${message}"
+
+Dados das despesas (para contexto):
+${JSON.stringify(expenseData, null, 2)}
+
+Contexto:
+- Tipo: ${analysis.type}
+- Intenção: ${analysis.intent}
+
+Seja:
+- Conversacional e amigável
+- Útil e informativo sobre finanças
+- Natural em português brasileiro
+- Proativo em sugerir análises ou relatórios baseados nos dados
+- Encorajador e positivo
+- Use os dados reais para dar exemplos específicos
+
+Se o usuário cumprimentar, responda de forma calorosa e ofereça insights.
+Se perguntar sobre gastos, use os dados para dar respostas específicas.
+Se for uma conversa geral, mantenha o foco em finanças pessoais com dados reais.
+`;
+
+    try {
+      console.log(
+        `💬 Gerando conversa contextual com ${this.RESPONSE_MODEL}...`,
+      );
+
+      const completion = await this.openai.chat.completions.create({
+        model: this.RESPONSE_MODEL,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'Você é o MeuBolso.AI, um assistente financeiro conversacional, amigável e útil. Use dados reais de despesas para manter conversas naturais e informativas em português brasileiro.',
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        max_tokens: 300,
+        temperature: 0.8,
+      });
+
+      return (
+        completion.choices[0]?.message?.content ||
+        'Olá! Como posso ajudar você com suas finanças hoje? 😊'
+      );
+    } catch (error) {
+      console.error('❌ Erro ao gerar conversa contextual:', error);
+      return 'Olá! Como posso ajudar você com suas finanças hoje? 😊';
+    }
   }
 }
