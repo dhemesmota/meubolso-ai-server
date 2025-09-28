@@ -332,13 +332,17 @@ Exemplo de resposta para "qual minha maior despesa":
     const prompt = `
 Analise a seguinte mensagem e extraia informações sobre uma despesa.
 Retorne APENAS um JSON válido com as seguintes chaves:
-- amount: número (valor da despesa)
+- amount: número (valor da despesa em reais)
 - category: string (categoria mais apropriada: Alimentação, Transporte, Moradia, Lazer, Saúde)
-- description: string (descrição da despesa)
+- description: string (descrição da despesa formatada e corrigida)
 - date: string (data no formato YYYY-MM-DD, SEMPRE use a data de hoje: ${today})
 - isValid: boolean (true se conseguiu extrair informações válidas)
 
-IMPORTANTE: A data deve SEMPRE ser ${today} (data de hoje). NUNCA use datas antigas.
+IMPORTANTE: 
+- A data deve SEMPRE ser ${today} (data de hoje). NUNCA use datas antigas.
+- Se o valor estiver em dólares (USD, $, dollar), converta para reais (multiplicar por 5.2)
+- Formate a descrição corretamente, corrigindo erros de digitação
+- Use português brasileiro correto
 
 Categorias disponíveis: Alimentação, Transporte, Moradia, Lazer, Saúde
 

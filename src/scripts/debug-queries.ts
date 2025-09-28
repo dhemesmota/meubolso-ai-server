@@ -1,8 +1,8 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../app.module';
-import { UsersService } from '../modules/users/users.service';
-import { ExpensesService } from '../modules/expenses/expenses.service';
 import { SmartQueryService } from '../modules/ai/smart-query.service';
+import { ExpensesService } from '../modules/expenses/expenses.service';
+import { UsersService } from '../modules/users/users.service';
 
 async function debugQueries() {
   console.log('🔍 Debug: Testando consultas...\n');

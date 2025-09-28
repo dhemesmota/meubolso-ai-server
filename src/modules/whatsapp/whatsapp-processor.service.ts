@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { AIResponse, AIService } from '../ai/ai.service';
 import { AIAdvancedService } from '../ai/ai-advanced.service';
+import { AIService } from '../ai/ai.service';
 import { SmartQueryService } from '../ai/smart-query.service';
 import { CategoriesService } from '../categories/categories.service';
 import { ExpensesService } from '../expenses/expenses.service';
@@ -72,8 +72,13 @@ export class WhatsAppProcessorService {
       // Buscar usuário
       const user = await this.usersService.findOrCreateByPhone(from);
       
-      // Processar consulta inteligente
-      const result = await this.smartQueryService.processSmartQuery(user.id, queryParams, 'report');
+      // Processar consulta inteligente com nome do usuário
+      const result = await this.smartQueryService.processSmartQuery(
+        user.id, 
+        queryParams, 
+        'report', 
+        user.name || 'Dhemes'
+      );
       
       if (result.success) {
         await this.whatsappService.sendMessage(from, result.data);
@@ -96,8 +101,13 @@ export class WhatsAppProcessorService {
       // Buscar usuário
       const user = await this.usersService.findOrCreateByPhone(from);
       
-      // Processar pergunta inteligente
-      const result = await this.smartQueryService.processSmartQuery(user.id, queryParams, 'question');
+      // Processar pergunta inteligente com nome do usuário
+      const result = await this.smartQueryService.processSmartQuery(
+        user.id, 
+        queryParams, 
+        'question', 
+        user.name || 'Dhemes'
+      );
       
       if (result.success && result.message) {
         await this.whatsappService.sendMessage(from, result.message);

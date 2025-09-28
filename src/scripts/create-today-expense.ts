@@ -1,8 +1,8 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../app.module';
-import { UsersService } from '../modules/users/users.service';
-import { ExpensesService } from '../modules/expenses/expenses.service';
 import { CategoriesService } from '../modules/categories/categories.service';
+import { ExpensesService } from '../modules/expenses/expenses.service';
+import { UsersService } from '../modules/users/users.service';
 
 async function createTodayExpense() {
   console.log('💰 Criando despesa de hoje...\n');
