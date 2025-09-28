@@ -24,9 +24,25 @@ export interface IntelligentResponse {
   queryParams?: any;
 }
 
+/**
+ * Serviço de IA Avançado com sistema híbrido de modelos
+ *
+ * Estratégia de modelos:
+ * - GPT-4o: Análise de intenção e respostas inteligentes (maior precisão)
+ * - GPT-3.5-turbo: Parsing de despesas (custo-benefício otimizado)
+ *
+ * Benefícios:
+ * - Melhor compreensão de contexto financeiro
+ * - Respostas mais naturais em português brasileiro
+ * - Redução de custos em tarefas simples
+ * - Maior precisão na análise de intenções complexas
+ */
 @Injectable()
 export class AIAdvancedService {
   private openai: OpenAI;
+  private readonly INTENT_MODEL = 'gpt-4o'; // Modelo mais avançado para análise de intenção
+  private readonly RESPONSE_MODEL = 'gpt-4o'; // Modelo mais avançado para respostas inteligentes
+  private readonly PARSING_MODEL = 'gpt-3.5-turbo'; // Modelo mais barato para parsing simples
 
   constructor(private configService: ConfigService) {
     this.openai = new OpenAI({
@@ -46,10 +62,10 @@ export class AIAdvancedService {
       // 2. Processar baseado no tipo
       switch (analysis.type) {
         case 'expense':
-          return await this.processExpenseIntent(message, analysis);
+          return await this.processExpenseIntent(message);
 
         case 'report':
-          return await this.processReportIntent(message, analysis);
+          return this.processReportIntent(analysis);
 
         case 'question':
           return await this.processQuestionIntent(message, analysis);
@@ -103,13 +119,14 @@ Exemplo de resposta:
 `;
 
     try {
+      console.log(`🧠 Analisando intenção com ${this.INTENT_MODEL}...`);
       const completion = await this.openai.chat.completions.create({
-        model: 'gpt-3.5-turbo',
+        model: this.INTENT_MODEL,
         messages: [
           {
             role: 'system',
             content:
-              'Você é um assistente que analisa intenções de mensagens financeiras em português. Retorne apenas JSON válido.',
+              'Você é um assistente especializado em análise de intenções de mensagens financeiras em português brasileiro. Use sua capacidade avançada de compreensão de contexto para identificar precisamente a intenção do usuário. Retorne apenas JSON válido.',
           },
           {
             role: 'user',
@@ -206,7 +223,6 @@ Exemplo de resposta:
 
   private async processExpenseIntent(
     message: string,
-    analysis: QueryAnalysis,
   ): Promise<IntelligentResponse> {
     // Usar o método existente de processamento de despesas
     const expenseData = await this.parseExpense(message);
@@ -216,10 +232,7 @@ Exemplo de resposta:
     };
   }
 
-  private async processReportIntent(
-    message: string,
-    analysis: QueryAnalysis,
-  ): Promise<IntelligentResponse> {
+  private processReportIntent(analysis: QueryAnalysis): IntelligentResponse {
     // Determinar parâmetros da consulta
     const queryParams = this.buildQueryParameters(analysis);
 
@@ -248,8 +261,10 @@ Exemplo de resposta:
     };
   }
 
-  private buildQueryParameters(analysis: QueryAnalysis): any {
-    const params: any = {};
+  private buildQueryParameters(
+    analysis: QueryAnalysis,
+  ): Record<string, unknown> {
+    const params: Record<string, unknown> = {};
 
     if (analysis.parameters.period) {
       params.period = analysis.parameters.period;
@@ -299,13 +314,16 @@ Exemplo de resposta para "qual minha maior despesa":
 `;
 
     try {
+      console.log(
+        `💬 Gerando resposta inteligente com ${this.RESPONSE_MODEL}...`,
+      );
       const completion = await this.openai.chat.completions.create({
-        model: 'gpt-3.5-turbo',
+        model: this.RESPONSE_MODEL,
         messages: [
           {
             role: 'system',
             content:
-              'Você é o MeuBolso.AI, um assistente financeiro inteligente e amigável.',
+              'Você é o MeuBolso.AI, um assistente financeiro inteligente e amigável especializado em português brasileiro. Use sua capacidade avançada para gerar respostas naturais, contextualizadas e úteis para o usuário.',
           },
           {
             role: 'user',
@@ -325,7 +343,13 @@ Exemplo de resposta para "qual minha maior despesa":
     }
   }
 
-  async parseExpense(message: string): Promise<any> {
+  async parseExpense(message: string): Promise<{
+    amount: number;
+    category: string;
+    description: string;
+    date: string;
+    isValid: boolean;
+  }> {
     // Reutilizar o método existente de parse de despesas
     // (implementação similar ao AIService existente)
     const today = new Date().toISOString().split('T')[0];
@@ -359,13 +383,14 @@ Exemplo de resposta:
 `;
 
     try {
+      console.log(`💰 Fazendo parse da despesa com ${this.PARSING_MODEL}...`);
       const completion = await this.openai.chat.completions.create({
-        model: 'gpt-3.5-turbo',
+        model: this.PARSING_MODEL,
         messages: [
           {
             role: 'system',
             content:
-              'Você é um assistente que extrai informações de despesas de mensagens em português. Retorne apenas JSON válido.',
+              'Você é um assistente especializado em extrair informações de despesas de mensagens em português brasileiro. Retorne apenas JSON válido.',
           },
           {
             role: 'user',
@@ -381,7 +406,13 @@ Exemplo de resposta:
         throw new Error('Resposta vazia da IA');
       }
 
-      const parsed = JSON.parse(response);
+      const parsed = JSON.parse(response) as {
+        amount: number;
+        category: string;
+        description: string;
+        date: string;
+        isValid: boolean;
+      };
 
       // Garantir que a data seja válida
       if (parsed.date === 'hoje' || parsed.date === 'today' || !parsed.date) {
@@ -395,7 +426,13 @@ Exemplo de resposta:
     }
   }
 
-  private fallbackParse(message: string): any {
+  private fallbackParse(message: string): {
+    amount: number;
+    category: string;
+    description: string;
+    date: string;
+    isValid: boolean;
+  } {
     const lowerMessage = message.toLowerCase();
 
     // Extrair valor
