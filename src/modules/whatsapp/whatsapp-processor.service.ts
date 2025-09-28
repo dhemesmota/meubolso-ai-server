@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AIResponse, AIService } from '../ai/ai.service';
+import { AIAdvancedService } from '../ai/ai-advanced.service';
+import { SmartQueryService } from '../ai/smart-query.service';
 import { CategoriesService } from '../categories/categories.service';
 import { ExpensesService } from '../expenses/expenses.service';
 import { UsersService } from '../users/users.service';
@@ -10,6 +12,8 @@ export class WhatsAppProcessorService {
   constructor(
     private whatsappService: WhatsAppService,
     private aiService: AIService,
+    private aiAdvancedService: AIAdvancedService,
+    private smartQueryService: SmartQueryService,
     private usersService: UsersService,
     private expensesService: ExpensesService,
     private categoriesService: CategoriesService,
@@ -19,20 +23,26 @@ export class WhatsAppProcessorService {
     try {
       console.log(`🤖 Processando mensagem de ${from}: ${message}`);
 
-      // Processar mensagem com IA
-      const aiResponse: AIResponse = await this.aiService.processMessage(message);
+      // Usar IA avançada para processar mensagem
+      const intelligentResponse = await this.aiAdvancedService.processIntelligentMessage(message);
+      
+      console.log('🧠 Resposta inteligente:', intelligentResponse);
 
-      switch (aiResponse.type) {
+      switch (intelligentResponse.type) {
         case 'help':
           await this.handleHelpCommand(from);
           break;
 
-        case 'report':
-          await this.handleReportCommand(from);
+        case 'expense':
+          await this.handleExpenseCommand(from, intelligentResponse.data);
           break;
 
-        case 'expense':
-          await this.handleExpenseCommand(from, aiResponse.data);
+        case 'report':
+          await this.handleSmartReportCommand(from, intelligentResponse.queryParams);
+          break;
+
+        case 'question':
+          await this.handleSmartQuestionCommand(from, intelligentResponse.message || '', intelligentResponse.queryParams);
           break;
 
         default:
@@ -49,29 +59,44 @@ export class WhatsAppProcessorService {
     await this.whatsappService.sendHelpMessage(from);
   }
 
-  private async handleReportCommand(from: string): Promise<void> {
+  private async handleSmartReportCommand(from: string, queryParams: any): Promise<void> {
     try {
       // Buscar usuário
       const user = await this.usersService.findOrCreateByPhone(from);
       
-      // Buscar despesas do mês atual
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = now.getMonth() + 1;
+      // Processar consulta inteligente
+      const result = await this.smartQueryService.processSmartQuery(user.id, queryParams, 'report');
       
-      const expenses = await this.expensesService.findByUserId(user.id);
-      
-      if (expenses.length === 0) {
-        await this.whatsappService.sendMessage(from, '📊 Nenhuma despesa registrada este mês.');
-        return;
+      if (result.success) {
+        await this.whatsappService.sendMessage(from, result.data);
+      } else {
+        await this.whatsappService.sendErrorMessage(from, result.message || 'Erro ao gerar relatório.');
       }
-
-      // Gerar relatório
-      const report = await this.aiService.generateReport(expenses);
-      await this.whatsappService.sendReport(from, report);
     } catch (error) {
-      console.error('❌ Erro ao gerar relatório:', error);
+      console.error('❌ Erro ao gerar relatório inteligente:', error);
       await this.whatsappService.sendErrorMessage(from, 'Erro ao gerar relatório.');
+    }
+  }
+
+  private async handleSmartQuestionCommand(from: string, intelligentMessage: string, queryParams: any): Promise<void> {
+    try {
+      // Enviar mensagem inteligente primeiro
+      if (intelligentMessage) {
+        await this.whatsappService.sendMessage(from, intelligentMessage);
+      }
+      
+      // Buscar usuário
+      const user = await this.usersService.findOrCreateByPhone(from);
+      
+      // Processar pergunta inteligente
+      const result = await this.smartQueryService.processSmartQuery(user.id, queryParams, 'question');
+      
+      if (result.success && result.message) {
+        await this.whatsappService.sendMessage(from, result.message);
+      }
+    } catch (error) {
+      console.error('❌ Erro ao processar pergunta inteligente:', error);
+      await this.whatsappService.sendErrorMessage(from, 'Erro ao processar pergunta.');
     }
   }
 
