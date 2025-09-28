@@ -110,7 +110,7 @@ export class AIAdvancedService {
 Analise a seguinte mensagem e determine a intenção do usuário.
 Retorne APENAS um JSON válido com as seguintes chaves:
 
-- type: string (expense, report, question, help, unknown)
+- type: string (expense, report, question, help, analysis, conversation, unknown)
 - intent: string (descrição da intenção)
 - parameters: objeto com:
   - period: string (today, week, month, year, custom)
@@ -223,12 +223,26 @@ Exemplo de resposta:
       lowerMessage.includes(keyword),
     );
 
+    // Detectar data específica
+    const datePattern = /\d{1,2}\/\d{1,2}/;
+    const hasSpecificDate = datePattern.test(message);
+
     if (hasReportKeyword) {
+      const parameters: Record<string, unknown> = { period: 'month' };
+
+      // Se tem data específica, adicionar aos parâmetros
+      if (hasSpecificDate) {
+        parameters.specificDate = message.match(/\d{1,2}\/\d{1,2}/)?.[0];
+        parameters.period = 'custom';
+      }
+
       return {
         type: 'report',
-        intent: 'consultar gastos',
-        parameters: { period: 'month' },
-        confidence: 0.7,
+        intent: hasSpecificDate
+          ? 'consultar gastos por data específica'
+          : 'consultar gastos',
+        parameters,
+        confidence: 0.8,
       };
     }
 
@@ -244,6 +258,8 @@ Exemplo de resposta:
       'insights',
       'tendências',
       'tendencias',
+      'saúde',
+      'saude',
     ];
     const hasAnalysisKeyword = analysisKeywords.some((keyword) =>
       lowerMessage.includes(keyword),
@@ -317,8 +333,20 @@ Exemplo de resposta:
     // Determinar parâmetros da consulta
     const queryParams = this.buildQueryParameters(analysis);
 
+    // Gerar mensagem de resposta baseada na intenção
+    let message = 'Vou verificar seus gastos para você! 📊';
+
+    if (analysis.parameters.specificDate) {
+      message = `Vou verificar seus gastos de ${analysis.parameters.specificDate} para você! 📊`;
+    } else if (analysis.parameters.period === 'today') {
+      message = 'Vou verificar seus gastos de hoje para você! 📊';
+    } else if (analysis.parameters.period === 'month') {
+      message = 'Vou verificar seus gastos do mês para você! 📊';
+    }
+
     return {
       type: 'report',
+      message,
       shouldQueryDatabase: true,
       queryParams,
     };
