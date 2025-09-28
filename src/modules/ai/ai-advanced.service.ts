@@ -219,12 +219,15 @@ Exemplo de resposta:
       'mês',
       'semana',
     ];
+
+    // Detectar "hoje" especificamente
+    const isToday = lowerMessage.includes('hoje');
     const hasReportKeyword = reportKeywords.some((keyword) =>
       lowerMessage.includes(keyword),
     );
 
-    // Detectar data específica
-    const datePattern = /\d{1,2}\/\d{1,2}/;
+    // Detectar data específica (formato DD/MM ou DD/MM/YY)
+    const datePattern = /\d{1,2}\/\d{1,2}(?:\/\d{2,4})?/;
     const hasSpecificDate = datePattern.test(message);
 
     if (hasReportKeyword) {
@@ -232,8 +235,11 @@ Exemplo de resposta:
 
       // Se tem data específica, adicionar aos parâmetros
       if (hasSpecificDate) {
-        parameters.specificDate = message.match(/\d{1,2}\/\d{1,2}/)?.[0];
+        const dateMatch = message.match(/\d{1,2}\/\d{1,2}(?:\/\d{2,4})?/);
+        parameters.specificDate = dateMatch?.[0];
         parameters.period = 'custom';
+      } else if (isToday) {
+        parameters.period = 'today';
       }
 
       return {
@@ -392,16 +398,14 @@ Exemplo de resposta:
     message: string,
     analysis: QueryAnalysis,
   ): Promise<IntelligentResponse> {
-    // Gerar resposta conversacional
-    const conversationResponse = await this.generateConversationalResponse(
-      message,
-      analysis,
-    );
+    // Gerar resposta conversacional simples sem necessidade de dados
+    const conversationResponse =
+      await this.generateSimpleConversationalResponse(message, analysis);
 
     return {
       type: 'conversation',
       message: conversationResponse,
-      requiresExpenseData: true,
+      requiresExpenseData: false,
     };
   }
 
@@ -550,6 +554,64 @@ Responda em português brasileiro de forma natural e profissional.
     } catch (error) {
       console.error('❌ Erro ao gerar análise financeira:', error);
       return 'Vou analisar seus dados financeiros para você! 📊';
+    }
+  }
+
+  private async generateSimpleConversationalResponse(
+    message: string,
+    analysis: QueryAnalysis,
+  ): Promise<string> {
+    const prompt = `
+Você é o MeuBolso.AI, um assistente financeiro conversacional e amigável.
+Responda de forma natural e útil, sem precisar de dados específicos.
+
+Mensagem do usuário: "${message}"
+
+Contexto:
+- Tipo: ${analysis.type}
+- Intenção: ${analysis.intent}
+
+Seja:
+- Conversacional e amigável
+- Útil e informativo sobre finanças
+- Natural em português brasileiro
+- Proativo em sugerir funcionalidades
+- Encorajador e positivo
+
+Se o usuário cumprimentar, responda de forma calorosa.
+Se for uma conversa geral, mantenha o foco em finanças pessoais.
+Sugira funcionalidades como "registrar despesa", "ver relatórios", "análise financeira".
+`;
+
+    try {
+      console.log(
+        `💬 Gerando resposta conversacional simples com ${this.RESPONSE_MODEL}...`,
+      );
+
+      const completion = await this.openai.chat.completions.create({
+        model: this.RESPONSE_MODEL,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'Você é o MeuBolso.AI, um assistente financeiro conversacional, amigável e útil. Mantenha conversas naturais em português brasileiro, sempre focando em ajudar com finanças pessoais.',
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        max_tokens: 200,
+        temperature: 0.8,
+      });
+
+      return (
+        completion.choices[0]?.message?.content ||
+        'Olá! Como posso ajudar você com suas finanças hoje? 😊'
+      );
+    } catch (error) {
+      console.error('❌ Erro ao gerar resposta conversacional simples:', error);
+      return 'Olá! Como posso ajudar você com suas finanças hoje? 😊';
     }
   }
 
