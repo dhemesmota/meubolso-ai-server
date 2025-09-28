@@ -76,16 +76,17 @@ export class AIService {
 
   private async parseExpense(message: string): Promise<ParsedExpense> {
     try {
+      const today = new Date().toISOString().split('T')[0];
       const prompt = `
 Analise a seguinte mensagem e extraia informações sobre uma despesa.
 Retorne APENAS um JSON válido com as seguintes chaves:
 - amount: número (valor da despesa)
 - category: string (categoria mais apropriada: Alimentação, Transporte, Moradia, Lazer, Saúde)
 - description: string (descrição da despesa)
-- date: string (data no formato YYYY-MM-DD, SEMPRE use o formato correto)
+- date: string (data no formato YYYY-MM-DD, SEMPRE use a data de hoje: ${today})
 - isValid: boolean (true se conseguiu extrair informações válidas)
 
-IMPORTANTE: A data deve SEMPRE estar no formato YYYY-MM-DD. Se não especificada, use a data de hoje.
+IMPORTANTE: A data deve SEMPRE ser ${today} (data de hoje). NUNCA use datas antigas.
 
 Categorias disponíveis: Alimentação, Transporte, Moradia, Lazer, Saúde
 
@@ -96,7 +97,7 @@ Exemplo de resposta:
   "amount": 50,
   "category": "Alimentação", 
   "description": "mercado",
-  "date": "2025-01-27",
+  "date": "${today}",
   "isValid": true
 }
 `;

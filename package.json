@@ -23,7 +23,9 @@
     "test:server": "ts-node src/scripts/test-server.ts",
     "test:twilio": "ts-node src/scripts/test-twilio.ts",
     "debug:integration": "ts-node src/scripts/debug-integration.ts",
-    "test:advanced-ai": "ts-node src/scripts/test-advanced-ai.ts"
+    "test:advanced-ai": "ts-node src/scripts/test-advanced-ai.ts",
+    "debug:queries": "ts-node src/scripts/debug-queries.ts",
+    "create:today-expense": "ts-node src/scripts/create-today-expense.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

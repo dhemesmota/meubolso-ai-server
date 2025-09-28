@@ -23,6 +23,14 @@ export class WhatsAppProcessorService {
     try {
       console.log(`🤖 Processando mensagem de ${from}: ${message}`);
 
+      // Verificar se é múltiplas despesas primeiro
+      const multipleExpenses = this.detectMultipleExpenses(message);
+      if (multipleExpenses.length > 1) {
+        console.log(`🔄 Detectadas ${multipleExpenses.length} despesas múltiplas`);
+        await this.handleMultipleExpensesCommand(from, message);
+        return;
+      }
+
       // Usar IA avançada para processar mensagem
       const intelligentResponse = await this.aiAdvancedService.processIntelligentMessage(message);
       
@@ -139,6 +147,134 @@ export class WhatsAppProcessorService {
       console.error('❌ Erro ao registrar despesa:', error);
       await this.whatsappService.sendErrorMessage(from, 'Erro ao registrar despesa.');
     }
+  }
+
+  private async handleMultipleExpensesCommand(from: string, message: string): Promise<void> {
+    try {
+      console.log(`🔄 Processando múltiplas despesas: ${message}`);
+      
+      // Detectar múltiplas despesas na mensagem
+      const expensePatterns = this.detectMultipleExpenses(message);
+      
+      if (expensePatterns.length === 0) {
+        await this.whatsappService.sendErrorMessage(from, 'Não consegui identificar despesas na mensagem.');
+        return;
+      }
+
+      // Buscar ou criar usuário
+      const user = await this.usersService.findOrCreateByPhone(from);
+      
+      let successCount = 0;
+      let totalAmount = 0;
+      const registeredExpenses: Array<{description: string, amount: number, category: string}> = [];
+
+      // Processar cada despesa
+      for (const expenseText of expensePatterns) {
+        try {
+          // Usar IA para processar cada despesa individual
+          const expenseData = await this.aiAdvancedService.parseExpense(expenseText);
+          
+          if (expenseData && expenseData.isValid) {
+            // Buscar categoria
+            let category = await this.categoriesService.findByName(expenseData.category);
+            if (!category) {
+              category = await this.categoriesService.create({ name: expenseData.category });
+            }
+
+            // Criar despesa
+            const expense = await this.expensesService.create({
+              user_id: user.id,
+              description: expenseData.description,
+              category_id: category.id,
+              amount: expenseData.amount,
+              date: expenseData.date,
+            });
+
+            registeredExpenses.push({
+              description: expense.description,
+              amount: expense.amount,
+              category: category.name
+            });
+
+            successCount++;
+            totalAmount += expense.amount;
+            
+            console.log(`✅ Despesa registrada: ${expense.description} - R$ ${expense.amount}`);
+          }
+        } catch (error) {
+          console.error(`❌ Erro ao processar despesa "${expenseText}":`, error);
+        }
+      }
+
+      // Enviar resumo das despesas registradas
+      if (successCount > 0) {
+        let summary = `✅ ${successCount} despesa(s) registrada(s) com sucesso!\n\n`;
+        summary += `💰 Total: R$ ${totalAmount.toFixed(2)}\n\n`;
+        
+        registeredExpenses.forEach((expense, index) => {
+          summary += `${index + 1}. ${expense.description} - R$ ${expense.amount.toFixed(2)} (${expense.category})\n`;
+        });
+
+        await this.whatsappService.sendMessage(from, summary);
+      } else {
+        await this.whatsappService.sendErrorMessage(from, 'Nenhuma despesa válida foi encontrada na mensagem.');
+      }
+    } catch (error) {
+      console.error('❌ Erro ao processar múltiplas despesas:', error);
+      await this.whatsappService.sendErrorMessage(from, 'Erro ao processar despesas.');
+    }
+  }
+
+  private detectMultipleExpenses(message: string): string[] {
+    // Detectar padrões de múltiplas despesas
+    const patterns: string[] = [];
+    
+    // Primeiro, verificar se há múltiplas despesas separadas por vírgula
+    const commaCount = (message.match(/,/g) || []).length;
+    if (commaCount > 0 && message.includes('gastei')) {
+      // Dividir por vírgula e filtrar apenas as que contêm "gastei"
+      const parts = message.split(',').map(part => part.trim());
+      const expenseParts = parts.filter(part => part.toLowerCase().includes('gastei'));
+      if (expenseParts.length > 1) {
+        patterns.push(...expenseParts);
+        return patterns;
+      }
+    }
+    
+    // Verificar se há múltiplas despesas separadas por ponto
+    const dotCount = (message.match(/\./g) || []).length;
+    if (dotCount > 0 && message.includes('gastei')) {
+      // Dividir por ponto e filtrar apenas as que contêm "gastei"
+      const parts = message.split('.').map(part => part.trim());
+      const expenseParts = parts.filter(part => part.toLowerCase().includes('gastei'));
+      if (expenseParts.length > 1) {
+        patterns.push(...expenseParts);
+        return patterns;
+      }
+    }
+    
+    // Verificar se há múltiplas despesas separadas por quebra de linha
+    const newlineCount = (message.match(/\n/g) || []).length;
+    if (newlineCount > 0 && message.includes('gastei')) {
+      // Dividir por quebra de linha e filtrar apenas as que contêm "gastei"
+      const parts = message.split('\n').map(part => part.trim());
+      const expenseParts = parts.filter(part => part.toLowerCase().includes('gastei'));
+      if (expenseParts.length > 1) {
+        patterns.push(...expenseParts);
+        return patterns;
+      }
+    }
+    
+    // Se não encontrou padrões múltiplos, verificar se é uma despesa única
+    if (patterns.length === 0) {
+      const singlePattern = /gastei\s+\d+(?:[.,]\d{2})?\s+[^,.\n]+/gi;
+      const singleMatch = message.match(singlePattern);
+      if (singleMatch) {
+        patterns.push(...singleMatch);
+      }
+    }
+    
+    return patterns.map(pattern => pattern.trim());
   }
 
   private async handleUnknownCommand(from: string, message: string): Promise<void> {
