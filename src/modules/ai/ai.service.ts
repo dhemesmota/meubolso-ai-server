@@ -82,8 +82,10 @@ Retorne APENAS um JSON válido com as seguintes chaves:
 - amount: número (valor da despesa)
 - category: string (categoria mais apropriada: Alimentação, Transporte, Moradia, Lazer, Saúde)
 - description: string (descrição da despesa)
-- date: string (data no formato YYYY-MM-DD, use hoje se não especificado)
+- date: string (data no formato YYYY-MM-DD, SEMPRE use o formato correto)
 - isValid: boolean (true se conseguiu extrair informações válidas)
+
+IMPORTANTE: A data deve SEMPRE estar no formato YYYY-MM-DD. Se não especificada, use a data de hoje.
 
 Categorias disponíveis: Alimentação, Transporte, Moradia, Lazer, Saúde
 
@@ -121,6 +123,12 @@ Exemplo de resposta:
       }
 
       const parsed = JSON.parse(response);
+      
+      // Garantir que a data seja válida
+      if (parsed.date === 'hoje' || parsed.date === 'today' || !parsed.date) {
+        parsed.date = new Date().toISOString().split('T')[0];
+      }
+      
       return parsed as ParsedExpense;
     } catch (error) {
       console.error('❌ Erro ao fazer parse da despesa:', error);

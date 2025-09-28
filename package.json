@@ -21,7 +21,8 @@
     "seed:categories": "ts-node src/scripts/seed-categories.ts",
     "test:connection": "ts-node src/scripts/test-connection.ts",
     "test:server": "ts-node src/scripts/test-server.ts",
-    "test:twilio": "ts-node src/scripts/test-twilio.ts"
+    "test:twilio": "ts-node src/scripts/test-twilio.ts",
+    "debug:integration": "ts-node src/scripts/debug-integration.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
